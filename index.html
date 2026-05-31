@@ -37,6 +37,91 @@
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased min-h-screen pb-28 selection:bg-brand-500/30">
 
+    <!-- ── Auth Login Gate — shown until session is confirmed ── -->
+    <div id="auth-gate" class="fixed inset-0 bg-slate-950 z-[200] flex items-center justify-center p-6">
+        <div class="w-full max-w-sm space-y-6">
+
+            <!-- Shared header -->
+            <div class="text-center">
+                <div class="text-brand-400 font-black text-3xl tracking-tighter mb-1">PGS</div>
+                <h1 class="text-white font-black text-xl uppercase tracking-tight">Enterprise Hub</h1>
+            </div>
+
+            <!-- View: Sign In -->
+            <div id="auth-view-login">
+                <p class="text-slate-500 text-xs text-center mb-5">Sign in to access your workspace</p>
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1.5">Email</label>
+                        <input type="email" id="auth-email" placeholder="your@email.com" autocomplete="email"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:border-brand-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1.5">Password</label>
+                        <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:border-brand-500 transition-all"
+                            onkeydown="if(event.key==='Enter') signIn()">
+                    </div>
+                    <div id="auth-error" class="hidden text-rose-400 text-xs font-bold bg-rose-500/10 border border-rose-500/20 rounded-xl p-3"></div>
+                    <div id="auth-success" class="hidden text-emerald-400 text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3"></div>
+                    <button onclick="signIn()" id="auth-btn"
+                        class="w-full bg-brand-500 text-slate-950 font-black py-3.5 rounded-xl text-sm uppercase tracking-wider hover:bg-brand-400 transition-all shadow-lg">
+                        Sign In
+                    </button>
+                    <button onclick="showAuthView('forgot')" class="w-full text-slate-500 hover:text-slate-300 text-xs font-bold py-1 transition-all">
+                        Forgot password?
+                    </button>
+                </div>
+            </div>
+
+            <!-- View: Forgot Password -->
+            <div id="auth-view-forgot" class="hidden">
+                <p class="text-slate-500 text-xs text-center mb-5">Enter your email and we'll send a reset link</p>
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1.5">Email</label>
+                        <input type="email" id="forgot-email" placeholder="your@email.com" autocomplete="email"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:border-brand-500 transition-all"
+                            onkeydown="if(event.key==='Enter') sendResetEmail()">
+                    </div>
+                    <div id="forgot-error" class="hidden text-rose-400 text-xs font-bold bg-rose-500/10 border border-rose-500/20 rounded-xl p-3"></div>
+                    <div id="forgot-success" class="hidden text-emerald-400 text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3"></div>
+                    <button onclick="sendResetEmail()" id="forgot-btn"
+                        class="w-full bg-brand-500 text-slate-950 font-black py-3.5 rounded-xl text-sm uppercase tracking-wider hover:bg-brand-400 transition-all shadow-lg">
+                        Send Reset Link
+                    </button>
+                    <button onclick="showAuthView('login')" class="w-full text-slate-500 hover:text-slate-300 text-xs font-bold py-1 transition-all">
+                        ← Back to Sign In
+                    </button>
+                </div>
+            </div>
+
+            <!-- View: Reset Password (shown after clicking email link) -->
+            <div id="auth-view-reset" class="hidden">
+                <p class="text-slate-500 text-xs text-center mb-5">Choose a new password for your account</p>
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-2xl">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1.5">New Password</label>
+                        <input type="password" id="reset-password" placeholder="••••••••" autocomplete="new-password"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:border-brand-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1.5">Confirm Password</label>
+                        <input type="password" id="reset-password-confirm" placeholder="••••••••" autocomplete="new-password"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm outline-none focus:border-brand-500 transition-all"
+                            onkeydown="if(event.key==='Enter') updatePassword()">
+                    </div>
+                    <div id="reset-error" class="hidden text-rose-400 text-xs font-bold bg-rose-500/10 border border-rose-500/20 rounded-xl p-3"></div>
+                    <button onclick="updatePassword()" id="reset-btn"
+                        class="w-full bg-brand-500 text-slate-950 font-black py-3.5 rounded-xl text-sm uppercase tracking-wider hover:bg-brand-400 transition-all shadow-lg">
+                        Update Password
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
     <div id="alarm-banner" class="hidden bg-brand-500 text-slate-950 font-black text-center py-3.5 px-4 text-xs tracking-wider flex items-center justify-between sticky top-0 z-50 shadow-xl border-b border-brand-400">
         <span class="flex items-center gap-2">⏰ <span id="alarm-text">MANDATORY WORKSHOP ALARM: Wear FFP3 mask & take high-protein meal prep.</span></span>
         <button onclick="dismissAlarm()" class="bg-slate-950 text-white text-[10px] px-3 py-1.5 rounded-lg font-bold">DISMISS</button>
@@ -285,6 +370,7 @@
                 <button onclick="switchTab('admin-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Inventory & Constants</button>
                 <button onclick="switchTab('products-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Products & Recipes</button>
             </nav>
+            <button onclick="signOut()" class="shrink-0 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-rose-400 border border-slate-800 hover:border-rose-500/30 transition-all whitespace-nowrap">Sign Out</button>
         </div>
     </header>
 

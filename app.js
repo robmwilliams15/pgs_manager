@@ -31,7 +31,30 @@ let selectedModalIntakeTimeStr = "";
 let calculatedOrderTotalGrossValue = 0;
 
 // Initialize Application Engine on Layout Load
-document.addEventListener('DOMContentLoaded', async () => {
+let appBooted = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+    // onAuthStateChange fires immediately with the current session (INITIAL_SESSION),
+    // so no separate getSession() call is needed.
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+            // User clicked the reset link in their email — show the new password form
+            document.getElementById('auth-gate').classList.remove('hidden');
+            showAuthView('reset');
+            return;
+        }
+        if (session && !appBooted) {
+            appBooted = true;
+            document.getElementById('auth-gate').classList.add('hidden');
+            bootApp();
+        } else if (!session) {
+            appBooted = false;
+            document.getElementById('auth-gate').classList.remove('hidden');
+        }
+    });
+});
+
+async function bootApp() {
     console.log("PGS Core Engine Initialised...");
     const baseNowDate = new Date();
     currentModalYear = baseNowDate.getFullYear();
@@ -42,7 +65,125 @@ document.addEventListener('DOMContentLoaded', async () => {
     await syncStateWithDatabaseCluster();
     configureSystemIntervalAlarms();
     configureRealtimeSubscriptions();
-});
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+function showAuthView(view) {
+    ['login', 'forgot', 'reset'].forEach(v => {
+        document.getElementById(`auth-view-${v}`).classList.toggle('hidden', v !== view);
+    });
+}
+
+async function signIn() {
+    const email    = (document.getElementById('auth-email').value || '').trim();
+    const password = document.getElementById('auth-password').value || '';
+    const btn      = document.getElementById('auth-btn');
+    const errEl    = document.getElementById('auth-error');
+    const succEl   = document.getElementById('auth-success');
+
+    errEl.classList.add('hidden');
+    succEl.classList.add('hidden');
+
+    if (!email || !password) {
+        errEl.textContent = 'Enter your email and password.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.textContent = 'Signing in…';
+    btn.disabled    = true;
+
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+    if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+        btn.textContent = 'Sign In';
+        btn.disabled    = false;
+    }
+    // On success, onAuthStateChange fires → bootApp() runs automatically
+}
+
+async function sendResetEmail() {
+    const email  = (document.getElementById('forgot-email').value || '').trim();
+    const btn    = document.getElementById('forgot-btn');
+    const errEl  = document.getElementById('forgot-error');
+    const succEl = document.getElementById('forgot-success');
+
+    errEl.classList.add('hidden');
+    succEl.classList.add('hidden');
+
+    if (!email) {
+        errEl.textContent = 'Enter your email address.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.textContent = 'Sending…';
+    btn.disabled    = true;
+
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.href,
+    });
+
+    btn.textContent = 'Send Reset Link';
+    btn.disabled    = false;
+
+    if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+    } else {
+        succEl.textContent = 'Reset link sent — check your inbox.';
+        succEl.classList.remove('hidden');
+    }
+}
+
+async function updatePassword() {
+    const pw1   = document.getElementById('reset-password').value || '';
+    const pw2   = document.getElementById('reset-password-confirm').value || '';
+    const btn   = document.getElementById('reset-btn');
+    const errEl = document.getElementById('reset-error');
+
+    errEl.classList.add('hidden');
+
+    if (pw1.length < 6) {
+        errEl.textContent = 'Password must be at least 6 characters.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (pw1 !== pw2) {
+        errEl.textContent = 'Passwords do not match.';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    btn.textContent = 'Updating…';
+    btn.disabled    = true;
+
+    const { error } = await supabaseClient.auth.updateUser({ password: pw1 });
+
+    btn.textContent = 'Update Password';
+    btn.disabled    = false;
+
+    if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    // Sign out so the user logs in fresh with the new password
+    await supabaseClient.auth.signOut();
+    showAuthView('login');
+    const succEl = document.getElementById('auth-success');
+    succEl.textContent = 'Password updated — sign in with your new password.';
+    succEl.classList.remove('hidden');
+}
+
+async function signOut() {
+    await supabaseClient.auth.signOut();
+    window.location.reload();
+}
 
 // ── Debounce helper — prevents rapid-fire re-renders on bulk changes ──
 function debounce(fn, ms) {
