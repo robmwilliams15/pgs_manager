@@ -152,37 +152,37 @@
             </div>
 
             <!-- Main content: QR left, details right -->
-            <div class="flex gap-6 items-stretch">
+            <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 items-stretch">
 
-                <!-- QR Code panel -->
-                <div class="flex flex-col items-center justify-center bg-slate-900 border border-slate-700/60 rounded-2xl p-5 shrink-0">
+                <!-- QR Code panel — hidden on mobile, shown on sm+ -->
+                <div class="hidden sm:flex flex-col items-center justify-center bg-slate-900 border border-slate-700/60 rounded-2xl p-5 shrink-0">
                     <div class="bg-white p-3 rounded-xl">
                         <div id="payment-qr-canvas"></div>
                     </div>
                     <p class="text-slate-500 text-[10px] uppercase tracking-widest mt-3 font-bold">Scan with camera</p>
                 </div>
 
-                <!-- Payment detail fields — large, readable from across a table -->
+                <!-- Payment detail fields -->
                 <div class="flex-1 bg-slate-900 border border-slate-700/60 rounded-2xl divide-y divide-slate-800 overflow-hidden">
-                    <div class="flex justify-between items-center px-5 py-3.5">
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Account Name</span>
-                        <span class="text-white font-black text-xl text-right" id="qr-account-name">—</span>
+                    <div class="flex justify-between items-center px-4 sm:px-5 py-3">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider shrink-0">Account Name</span>
+                        <span class="text-white font-black text-base sm:text-xl text-right ml-2" id="qr-account-name">—</span>
                     </div>
-                    <div class="flex justify-between items-center px-5 py-3.5">
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Sort Code</span>
-                        <span class="text-white font-black text-3xl font-mono tracking-[0.2em]" id="qr-sort-code">—</span>
+                    <div class="flex justify-between items-center px-4 sm:px-5 py-3">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider shrink-0">Sort Code</span>
+                        <span class="text-white font-black text-xl sm:text-3xl font-mono tracking-[0.15em] sm:tracking-[0.2em]" id="qr-sort-code">—</span>
                     </div>
-                    <div class="flex justify-between items-center px-5 py-3.5">
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Account No.</span>
-                        <span class="text-white font-black text-3xl font-mono tracking-[0.15em]" id="qr-account-number">—</span>
+                    <div class="flex justify-between items-center px-4 sm:px-5 py-3">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider shrink-0">Account No.</span>
+                        <span class="text-white font-black text-xl sm:text-3xl font-mono tracking-[0.1em] sm:tracking-[0.15em]" id="qr-account-number">—</span>
                     </div>
-                    <div class="flex justify-between items-center px-5 py-3.5">
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Amount</span>
-                        <span class="text-emerald-400 font-black text-4xl" id="qr-amount">£150.00</span>
+                    <div class="flex justify-between items-center px-4 sm:px-5 py-3">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider shrink-0">Amount</span>
+                        <span class="text-emerald-400 font-black text-3xl sm:text-4xl" id="qr-amount">£150.00</span>
                     </div>
-                    <div class="flex justify-between items-center px-5 py-3.5">
-                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Reference</span>
-                        <span class="text-brand-400 font-black text-2xl font-mono tracking-wider" id="qr-reference">—</span>
+                    <div class="flex justify-between items-center px-4 sm:px-5 py-3">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider shrink-0">Reference</span>
+                        <span class="text-brand-400 font-black text-xl sm:text-2xl font-mono tracking-wider" id="qr-reference">—</span>
                     </div>
                 </div>
             </div>
