@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en-GB" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PGS Enterprise Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    colors: { 
+                        slate: { 900: '#060a12', 800: '#0f172a', 700: '#1e293b', 950: '#020408' }, 
+                        brand: { 400: '#ffaa44', 500: '#FF8700', 600: '#e06000' } 
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; touch-action: manipulation; font-family: 'Inter', sans-serif; }
+        .touch-target { min-height: 48px; min-width: 48px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased min-h-screen pb-28 selection:bg-brand-500/30">
+
+    <div id="alarm-banner" class="hidden bg-brand-500 text-slate-950 font-black text-center py-3.5 px-4 text-xs tracking-wider flex items-center justify-between sticky top-0 z-50 shadow-xl border-b border-brand-400">
+        <span class="flex items-center gap-2">⏰ <span id="alarm-text">MANDATORY WORKSHOP ALARM: Wear FFP3 mask & take high-protein meal prep.</span></span>
+        <button onclick="dismissAlarm()" class="bg-slate-950 text-white text-[10px] px-3 py-1.5 rounded-lg font-bold">DISMISS</button>
+    </div>
+
+    <div id="checklist-modal" class="hidden fixed inset-0 bg-slate-950/95 z-50 flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
+            <h2 class="text-xl font-black text-brand-400 uppercase tracking-tight">Pre-Job Safety Check</h2>
+            <div class="space-y-3 text-sm mt-4">
+                <label class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer"><input type="checkbox" class="w-6 h-6 rounded accent-brand-500"> <span>FFP3 Respiratory Mask Checked</span></label>
+                <label class="flex items-center gap-3 p-3 bg-slate-900 rounded-xl border border-slate-700 cursor-pointer"><input type="checkbox" class="w-6 h-6 rounded accent-brand-500"> <span>6.5mm Structural Masonry Bits Ready</span></label>
+            </div>
+            <button onclick="toggleElement('checklist-modal')" class="w-full mt-6 bg-brand-500 text-slate-950 font-black py-4 rounded-xl text-xs uppercase tracking-wider">Authorize System Entry</button>
+        </div>
+    </div>
+
+    <!-- ── Payment QR Checkout Modal ── -->
+    <div id="payment-qr-modal" class="hidden fixed inset-0 bg-slate-950 z-[60] flex items-center justify-center p-6">
+        <div class="w-full max-w-2xl space-y-6">
+
+            <!-- Header -->
+            <div class="text-center">
+                <div class="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-4 py-1.5 rounded-full mb-4">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                    <span class="text-emerald-400 text-xs font-black uppercase tracking-widest">Secure Your Installation Slot</span>
+                </div>
+                <p class="text-slate-400 text-sm">Open your banking app and set up a new bank transfer using the details below.</p>
+            </div>
+
+            <!-- Main content: QR left, details right -->
+            <div class="flex gap-6 items-stretch">
+
+                <!-- QR Code panel -->
+                <div class="flex flex-col items-center justify-center bg-slate-900 border border-slate-700/60 rounded-2xl p-5 shrink-0">
+                    <div class="bg-white p-3 rounded-xl">
+                        <div id="payment-qr-canvas"></div>
+                    </div>
+                    <p class="text-slate-500 text-[10px] uppercase tracking-widest mt-3 font-bold">Scan with camera</p>
+                </div>
+
+                <!-- Payment detail fields — large, readable from across a table -->
+                <div class="flex-1 bg-slate-900 border border-slate-700/60 rounded-2xl divide-y divide-slate-800 overflow-hidden">
+                    <div class="flex justify-between items-center px-5 py-3.5">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Account Name</span>
+                        <span class="text-white font-black text-xl text-right" id="qr-account-name">—</span>
+                    </div>
+                    <div class="flex justify-between items-center px-5 py-3.5">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Sort Code</span>
+                        <span class="text-white font-black text-3xl font-mono tracking-[0.2em]" id="qr-sort-code">—</span>
+                    </div>
+                    <div class="flex justify-between items-center px-5 py-3.5">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Account No.</span>
+                        <span class="text-white font-black text-3xl font-mono tracking-[0.15em]" id="qr-account-number">—</span>
+                    </div>
+                    <div class="flex justify-between items-center px-5 py-3.5">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Amount</span>
+                        <span class="text-emerald-400 font-black text-4xl" id="qr-amount">£150.00</span>
+                    </div>
+                    <div class="flex justify-between items-center px-5 py-3.5">
+                        <span class="text-slate-500 text-xs font-bold uppercase tracking-wider w-32 shrink-0">Reference</span>
+                        <span class="text-brand-400 font-black text-2xl font-mono tracking-wider" id="qr-reference">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-4">
+                <button onclick="closePaymentQRModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 font-bold py-4 rounded-xl text-sm uppercase tracking-wider transition-all">Skip for Now</button>
+                <button onclick="confirmDepositReceivedFromQR()" class="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-xl text-sm uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/20">✓ Payment Received</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="customer-intake-modal" class="hidden fixed inset-0 bg-slate-950/95 z-50 flex items-start justify-center p-4 backdrop-blur-md overflow-y-auto custom-scrollbar">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-4xl border border-slate-700 shadow-2xl my-4">
+            <div class="flex justify-between items-start border-b border-slate-700 pb-3 mb-4">
+                <div>
+                    <h2 id="intake-modal-title" class="text-xl font-black text-brand-400 uppercase tracking-tight">Customer Intake & Delivery Booking</h2>
+                    <p class="text-xs text-slate-400">Assign client particulars and map target installation windows.</p>
+                </div>
+                <button onclick="cancelModalAndReset()" class="text-slate-400 hover:text-white text-xs bg-slate-900 px-3 py-1 rounded-lg">✕ CANCEL</button>
+            </div>
+            <!-- Edit mode banner — hidden by default -->
+            <div id="edit-mode-banner" class="hidden mb-4 bg-sky-500/10 border border-sky-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <span class="text-sky-400 text-sm">✏️</span>
+                <span class="text-sky-300 text-xs font-bold uppercase tracking-wide">Editing existing job — changes will update the record and recalculate the quote</span>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider">1. Client Contact Particulars</span>
+                    <div class="space-y-3 text-sm">
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase mb-1">Customer Full Name</label>
+                            <input type="text" id="pipeline-name" placeholder="John Smith" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-brand-500 outline-none font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase mb-1">Contact Phone / Email</label>
+                            <input type="text" id="pipeline-contact" placeholder="07123 456789 / john@example.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-brand-500 outline-none font-medium">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase mb-1">Installation Site Address</label>
+                            <textarea id="pipeline-address" rows="3" placeholder="123 High Street, Stoke-on-Trent, ST6 1AA" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-brand-500 outline-none font-medium leading-relaxed"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase mb-1">SketchUp Web Viewer ID (Optional)</label>
+                            <input type="url" id="pipeline-sketchup" placeholder="https://app.sketchup.com/..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-brand-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider">2. Assign Live Installation Slot</span>
+                    
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-900 space-y-2">
+                        <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
+                            <span class="text-slate-400">Select Installation Day</span>
+                            <div class="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800 text-white">
+                                <button onclick="changeModalMonth(-1)" type="button" class="px-2 py-0.5 text-slate-400 hover:text-brand-400 font-black text-xs touch-target">&lt;</button>
+                                <span id="modal-calendar-month-label" class="text-brand-400 min-w-[100px] text-center font-bold">June 2026</span>
+                                <button onclick="changeModalMonth(1)" type="button" class="px-2 py-0.5 text-slate-400 hover:text-brand-400 font-black text-xs touch-target">&gt;</button>
+                            </div>
+                        </div>
+                        <div id="modal-interactive-calendar-grid" class="grid grid-cols-7 gap-1 text-xs text-center">
+                            </div>
+                    </div>
+
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-900 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="block text-xs text-slate-500 font-bold uppercase tracking-wide">Select Arrival Window Slot</span>
+                            <span id="modal-duration-estimate" class="text-[10px] font-black text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 hidden"></span>
+                        </div>
+                        <div id="modal-time-slot-picker-grid" class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <p class="col-span-3 text-slate-500 text-xs italic text-center py-2">Select an installation date above to see available slots.</p>
+                        </div>
+                    </div>
+
+                    <!-- Existing bookings for the selected day -->
+                    <div id="modal-day-jobs-panel" class="hidden bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                        <span class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Already booked this day</span>
+                        <div id="modal-day-jobs-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-700/60 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-950/40 p-4 rounded-xl border border-slate-700/40">
+                <div class="text-left">
+                    <span class="text-xs text-slate-400 uppercase font-bold block">Consolidated Project Valuation:</span>
+                    <span class="text-2xl font-black text-emerald-400" id="modal-summary-price-tag">£0.00</span>
+                </div>
+                <div class="flex gap-2.5 w-full sm:w-auto text-xs">
+                    <button id="modal-btn-continue" onclick="processOrderFromModalWorkflow(false)" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-3.5 px-6 rounded-xl uppercase tracking-wider transition-all shadow-md">Confirm & Continue</button>
+                    <button id="modal-btn-invoice" onclick="processOrderFromModalWorkflow(true)" class="flex-1 sm:flex-none bg-brand-500 hover:bg-brand-600 text-slate-950 font-black py-3.5 px-6 rounded-xl uppercase tracking-wider transition-all shadow-lg">Confirm & Send Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Edit Job Modal ── -->
+    <div id="edit-job-modal" class="hidden fixed inset-0 bg-slate-950/95 z-50 flex items-start justify-center p-4 backdrop-blur-md overflow-y-auto custom-scrollbar">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-3xl border border-slate-700 shadow-2xl my-4 space-y-5">
+
+            <!-- Header -->
+            <div class="flex justify-between items-start border-b border-slate-700 pb-3">
+                <div>
+                    <h2 id="edit-job-title" class="text-lg font-black text-sky-400 uppercase tracking-tight">Edit Job</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Changes update the existing record. Deposit and status are unaffected.</p>
+                </div>
+                <button onclick="closeEditJobModal()" class="text-slate-400 hover:text-white text-xs bg-slate-900 px-3 py-1.5 rounded-lg font-bold">✕ CANCEL</button>
+            </div>
+
+            <!-- Customer details -->
+            <div class="space-y-3">
+                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Customer Details</span>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase mb-1">Full Name</label>
+                        <input type="text" id="edit-job-name" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-sky-500 font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase mb-1">Phone / Email</label>
+                        <input type="text" id="edit-job-contact" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-sky-500 font-medium">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-[10px] text-slate-500 uppercase mb-1">Installation Address</label>
+                        <textarea id="edit-job-address" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-sky-500 font-medium resize-none"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modules -->
+            <div class="space-y-3">
+                <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Modules</span>
+                <div class="flex gap-2">
+                    <select id="edit-module-dropdown" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white outline-none focus:border-sky-500"></select>
+                    <button onclick="addEditJobModule()" class="bg-sky-500 text-slate-950 font-black px-4 rounded-xl text-lg hover:bg-sky-400 transition-all">+</button>
+                </div>
+                <div id="edit-job-module-list" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1"></div>
+                <div class="flex justify-between items-center pt-1 border-t border-slate-700/50 text-xs">
+                    <span class="text-slate-400 font-bold uppercase">Total Quote Value</span>
+                    <span id="edit-job-total-price" class="text-emerald-400 font-black text-base">£0.00</span>
+                </div>
+            </div>
+
+            <!-- Date & time -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="block text-xs font-bold text-slate-400 uppercase tracking-wider">Install Date & Time</span>
+                    <span id="edit-job-date-label" class="text-xs font-bold text-slate-500">Select a date below</span>
+                </div>
+                <!-- Time slots — rendered dynamically -->
+                <div id="edit-time-slot-picker-grid" class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <p class="col-span-3 text-slate-500 text-xs italic text-center py-2">Select an install date below to see available slots.</p>
+                </div>
+                <!-- Calendar -->
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-900 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold uppercase">
+                        <button onclick="changeEditCalMonth(-1)" class="px-2 py-1 text-slate-400 hover:text-brand-400 font-black">&lt;</button>
+                        <span id="edit-cal-month-label" class="text-brand-400"></span>
+                        <button onclick="changeEditCalMonth(1)" class="px-2 py-1 text-slate-400 hover:text-brand-400 font-black">&gt;</button>
+                    </div>
+                    <div id="edit-job-calendar-grid" class="grid grid-cols-7 gap-1"></div>
+                </div>
+            </div>
+
+            <!-- Save buttons -->
+            <div class="flex gap-3 pt-2 border-t border-slate-700/50">
+                <button onclick="saveEditedJob(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all">Save Changes</button>
+                <button onclick="saveEditedJob(true)"  class="flex-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black py-3.5 rounded-xl text-xs uppercase tracking-wider transition-all">Save & Reprint Invoice</button>
+            </div>
+
+        </div>
+    </div>
+
+    <header class="bg-slate-800/90 backdrop-blur border-b border-slate-700 p-4 sticky top-0 z-40 shadow-xl">
+        <div class="max-w-[1600px] mx-auto flex flex-col lg:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div id="logo-container" class="w-10 h-10 bg-slate-950 rounded-xl border border-slate-700 flex items-center justify-center text-xs font-black text-brand-400">PGS</div>
+                <h1 class="text-base font-black tracking-tighter text-white">POTTERIES GARAGE SYSTEMS <span class="text-brand-400 font-light text-xs tracking-wider">| Staffordshire Storage</span></h1>
+            </div>
+            <nav class="flex gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 w-full lg:w-auto overflow-x-auto custom-scrollbar">
+                <button onclick="switchTab('showroom-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold bg-brand-500 text-slate-950 whitespace-nowrap transition-all">Customer Planner</button>
+                <button onclick="switchTab('outstanding-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Outstanding Jobs</button>
+                <button onclick="switchTab('batch-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Weekly Batch Run</button>
+                <button onclick="switchTab('finance-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Financial Ledger</button>
+                <button onclick="switchTab('admin-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Inventory & Constants</button>
+                <button onclick="switchTab('products-tab')" class="tab-btn px-4 py-2.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white whitespace-nowrap transition-all">Products & Recipes</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
+
+        <div id="showroom-tab" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div class="xl:col-span-1 bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-5">
+                    <div>
+                        <h3 class="text-base font-black text-white uppercase tracking-wider">Package Configuration</h3>
+                        <p class="text-xs text-slate-400">Select frame types and custom dimensions with the client.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="block text-xs font-bold text-slate-400 uppercase">Select Framework Base</label>
+                        <div class="flex gap-2">
+                            <select id="showroom-template-dropdown" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none"></select>
+                            <button onclick="addTemplateToActiveCart()" class="bg-brand-500 text-slate-950 font-black px-4 rounded-xl text-lg touch-target">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-slate-700/60 pt-4">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Current Build Assembly Components</label>
+                        <div id="active-staged-modules-list" class="space-y-2 max-h-40 overflow-y-auto custom-scrollbar p-1 bg-slate-950 rounded-xl border border-slate-900">
+                            <p class="text-slate-500 text-xs italic p-2 text-center">No modules added yet. Select a type above and hit +.</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700/60 pt-4">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Add Obstruction</label>
+                        <div class="space-y-2">
+                            <div class="flex gap-2">
+                                <select id="obstruction-type-select" onchange="updateObstructionDefaultWidth()" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none">
+                                    <option value="column">Column</option>
+                                    <option value="door">Door</option>
+                                    <option value="window">Window</option>
+                                    <option value="gap">Gap / Space</option>
+                                </select>
+                                <input id="obstruction-width-input" type="number" value="100" min="10" max="3000" class="w-20 bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none text-center" placeholder="mm" />
+                            </div>
+                            <div class="flex gap-2">
+                                <select id="obstruction-position-select" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-white outline-none">
+                                    <option value="-1">At the start</option>
+                                </select>
+                                <button onclick="addObstructionToCanvas()" class="bg-rose-500/20 text-rose-400 border border-rose-500/30 font-black px-4 rounded-xl text-lg hover:bg-rose-500/30 transition-all">+</button>
+                            </div>
+                        </div>
+                        <div id="active-obstructions-list" class="mt-2 space-y-1"></div>
+                    </div>
+
+                    <div class="border-t border-slate-700/60 pt-4" id="parameter-inputs-container">
+                        </div>
+                    <div class="border-t border-slate-700/60 pt-4">
+                        <button onclick="lockAndConfirmBuildStructure()" class="w-full bg-brand-500 text-slate-950 font-black py-4 rounded-xl text-xs uppercase tracking-wider shadow-md">Confirm Build Structure</button>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-2 bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl flex flex-col justify-between space-y-4">
+                    <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-900 min-h-[360px] relative overflow-hidden flex items-center justify-center p-4 shadow-inner" id="canvas-blueprint-viewport">
+                        <div class="text-slate-600 text-xs select-none">Staging structural framework schematics...</div>
+                    </div>
+                    
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center" id="showroom-live-price-box">
+                        <span class="text-slate-400 text-xs font-bold uppercase">Total Price:</span>
+                        <span class="text-2xl font-black text-emerald-400">£0.00</span>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-900 space-y-3 shadow-inner">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs">🛠️</span>
+                                <h4 class="text-xs font-black uppercase tracking-wider text-slate-300">Product Recipes — Bill of Materials</h4>
+                            </div>
+                            <span class="text-[9px] bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded font-mono uppercase tracking-wider font-bold">
+                                Live Calculating
+                            </span>
+                        </div>
+
+                        <div id="planner-bom-container" class="text-xs text-slate-300">
+                            <div class="text-center py-4 text-slate-500 text-xs italic">
+                                Add modules to the staging area to generate a live material recipe breakdown.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div id="outstanding-tab" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-3 rounded-2xl border border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-xs shadow-xl">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="setOutstandingJobFilter('all')" id="filter-btn-all" class="px-4 py-2.5 rounded-xl bg-brand-500 text-slate-950 font-black uppercase tracking-wider transition-all">All Active</button>
+                    <button onclick="setOutstandingJobFilter('deposit_due')" id="filter-btn-deposit_due" class="px-4 py-2.5 rounded-xl bg-slate-950 text-slate-400 border border-slate-800 font-bold uppercase tracking-wider hover:text-white transition-all">🚨 Deposit Due</button>
+                    <button onclick="setOutstandingJobFilter('deposit_paid')" id="filter-btn-deposit_paid" class="px-4 py-2.5 rounded-xl bg-slate-950 text-slate-400 border border-slate-800 font-bold uppercase tracking-wider hover:text-white transition-all">💵 Paid</button>
+                    <button onclick="setOutstandingJobFilter('ready_prep')" id="filter-btn-ready_prep" class="px-4 py-2.5 rounded-xl bg-slate-950 text-slate-400 border border-slate-800 font-bold uppercase tracking-wider hover:text-white transition-all">🔨 Prep</button>
+                    <button onclick="setOutstandingJobFilter('ready_install')" id="filter-btn-ready_install" class="px-4 py-2.5 rounded-xl bg-slate-950 text-slate-400 border border-slate-800 font-bold uppercase tracking-wider hover:text-white transition-all">🚚 Install</button>
+                    <button onclick="setOutstandingJobFilter('historical')" id="filter-btn-historical" class="px-4 py-2.5 rounded-xl bg-slate-950 text-slate-400 border border-slate-800 font-bold uppercase tracking-wider hover:text-white transition-all">📜 Settled</button>
+                </div>
+                
+                <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-900 w-full md:w-auto">
+                    <button onclick="setOutstandingViewMode('list')" id="view-btn-list" class="flex-1 md:flex-none px-4 py-2 rounded-lg bg-brand-500 text-slate-950 font-black uppercase tracking-wide transition-all">List Deck</button>
+                    <button onclick="setOutstandingViewMode('calendar')" id="view-btn-calendar" class="flex-1 md:flex-none px-4 py-2 rounded-lg text-slate-400 font-bold uppercase tracking-wide hover:text-white transition-all">Calendar Grid</button>
+                </div>
+            </div>
+
+            <!-- Search bar -->
+            <div class="relative">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none">🔍</span>
+                <input
+                    type="text"
+                    id="outstanding-search-input"
+                    placeholder="Search by name, address or quote number…"
+                    oninput="renderOutstandingJobsMatrixRegistryDeck()"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-4 py-3 text-white text-xs font-medium outline-none focus:border-brand-500 transition-all placeholder:text-slate-600"
+                >
+                <button id="outstanding-search-clear" onclick="clearJobSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white font-black text-sm leading-none transition-all">✕</button>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                <div class="xl:col-span-2" id="outstanding-main-interactive-container">
+
+                    <div id="outstanding-deck-wrapper" class="space-y-2 max-h-[660px] overflow-y-auto pr-1 custom-scrollbar">
+                        <div id="outstanding-jobs-cards-list-deck" class="space-y-2"></div>
+                    </div>
+
+                    <div id="outstanding-calendar-wrapper" class="hidden bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4 shadow-2xl">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-400 font-bold uppercase tracking-wider">Pipeline Allocation Matrix</span>
+                            <div class="flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-800 text-white">
+                                <button onclick="changeOutstandingCalMonth(-1)" type="button" class="px-2 py-0.5 text-slate-400 hover:text-brand-400 font-black text-sm">&lt;</button>
+                                <span id="outstanding-calendar-month-label" class="text-brand-400 min-w-[120px] text-center font-bold">June 2026</span>
+                                <button onclick="changeOutstandingCalMonth(1)" type="button" class="px-2 py-0.5 text-slate-400 hover:text-brand-400 font-black text-sm">&gt;</button>
+                            </div>
+                        </div>
+                        <div id="outstanding-tab-calendar-grid" class="grid grid-cols-7 gap-1.5 text-center"></div>
+                    </div>
+                </div>
+
+                <div class="xl:col-span-3 bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col xl:h-[660px]" id="drilldown-action-task-viewport">
+                    <div class="flex flex-col items-center justify-center flex-1 p-10 text-center">
+                        <div class="text-6xl mb-5 opacity-10">📋</div>
+                        <p class="text-slate-400 text-sm font-black uppercase tracking-widest mb-2">No Job Selected</p>
+                        <p class="text-slate-600 text-xs max-w-[220px] leading-relaxed">Select a job card from the list to view details, manage status and take actions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="batch-tab" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700 pb-5">
+                    <div>
+                        <h2 class="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+                            <span class="text-brand-500">🏭</span> Workshop Production Slicing Logs
+                        </h2>
+                        <p class="text-sm text-slate-400 mt-1">Consolidates active assembly components into aggregated lumber purchases and automated 1D nesting layouts.</p>
+                    </div>
+                    <div class="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-900 text-sm">
+                        <span class="text-slate-300 font-bold tracking-wide pl-1">Target Production Week:</span>
+                        <select id="batch-week-filter-dropdown" class="bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold outline-none focus:border-brand-500 transition-all" onchange="runWeeklyBatchConsolidationCalculations()"></select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-sm">
+                    <div class="bg-slate-950 rounded-xl border border-slate-800/80 p-5 space-y-4 relative overflow-hidden shadow-inner">
+                        <div class="absolute top-0 left-0 w-1.5 h-full bg-brand-500"></div>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-sm font-black text-brand-400 uppercase tracking-wider">Lumber Yard Sourcing (Mass Emerys Order)</h3>
+                            <span class="text-xs px-2.5 py-1 bg-slate-900 rounded border border-slate-800 text-slate-400 font-medium">Structural Timber</span>
+                        </div>
+                        <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                            <ul id="batch-emerys-list" class="space-y-3 text-slate-200"></ul>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-950 rounded-xl border border-slate-800/80 p-5 space-y-4 relative overflow-hidden shadow-inner">
+                        <div class="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-sm font-black text-emerald-400 uppercase tracking-wider">Hardware Sourcing (Mass Toolstation Pack)</h3>
+                            <span class="text-xs px-2.5 py-1 bg-slate-900 rounded border border-slate-800 text-slate-400 font-medium">Fasteners Stack</span>
+                        </div>
+                        <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                            <ul id="batch-toolstation-list" class="space-y-3 text-slate-200"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <span>🪓</span> 1D Nesting Cut Layouts Sheet <span class="text-slate-400 text-xs font-normal normal-case">(Tap part block to toggle completed cut status)</span>
+                        </h3>
+                        <span class="text-xs text-slate-500 font-medium">Optimization Engine: Best-Fit-Decreasing (BFD)</span>
+                    </div>
+                    
+                    <div id="batch-bfd-timber-packing-dump" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <p class="text-slate-500 text-sm italic text-center py-12 bg-slate-950 rounded-xl border border-slate-900 w-full">Select a timeline anchor above to generate structural nesting bars layout.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <span>🪚</span> Sheet Panel Cut List <span class="text-slate-400 text-xs font-normal normal-case">(Per-job OSB panel breakdown)</span>
+                        </h3>
+                        <span class="text-xs text-slate-500 font-medium">Stock Sheet: 2440 × 1220mm 18mm OSB3</span>
+                    </div>
+                    <div id="batch-sheet-cut-dump" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <p class="text-slate-500 text-sm italic text-center py-12 bg-slate-950 rounded-xl border border-slate-900 w-full">Select a timeline anchor above to generate sheet panel cut list.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="finance-tab" class="tab-content hidden space-y-6">
+
+            <!-- Row 1: KPI Cards -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex justify-between items-center">
+                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Settled Revenue (Tax Year)</p><h3 id="fin-gross-kpi" class="text-2xl font-black text-white mt-0.5">£0.00</h3><p id="fin-pipeline-kpi" class="text-[10px] text-slate-500 mt-1">Pipeline: £0.00</p></div>
+                    <div class="p-3 bg-brand-500/10 text-brand-400 rounded-xl text-lg">📈</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex justify-between items-center">
+                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Est. Net Profit (After COGS)</p><h3 id="fin-profit-kpi" class="text-2xl font-black text-emerald-400 mt-0.5">£0.00</h3><p id="fin-margin-kpi" class="text-[10px] text-slate-500 mt-1">Avg margin: 0%</p></div>
+                    <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl text-lg">💰</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex justify-between items-center">
+                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">HMRC Tax/NI Pot (26%)</p><h3 id="fin-tax-kpi" class="text-2xl font-black text-rose-400 mt-0.5">£0.00</h3><p id="fin-sa-countdown" class="text-[10px] text-slate-500 mt-1">SA deadline: —</p></div>
+                    <div class="p-3 bg-rose-500/10 text-rose-400 rounded-xl text-lg">🛡️</div>
+                </div>
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex justify-between items-center">
+                    <div><p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Expenses Logged</p><h3 id="fin-expenses-kpi" class="text-2xl font-black text-brand-400 mt-0.5">£0.00</h3><p id="fin-expenses-count" class="text-[10px] text-slate-500 mt-1">0 entries</p></div>
+                    <div class="p-3 bg-brand-500/10 text-brand-400 rounded-xl text-lg">🧾</div>
+                </div>
+            </div>
+
+            <!-- Row 2: Monthly Chart + Compliance -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Monthly Revenue Chart -->
+                <div class="lg:col-span-2 bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xs font-black uppercase text-white tracking-wider">Monthly Revenue — Settled Jobs</h3>
+                        <span id="fin-chart-year-label" class="text-xs font-bold text-brand-400 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800"></span>
+                    </div>
+                    <div class="relative h-48" id="fin-monthly-chart-container">
+                        <canvas id="fin-monthly-chart" class="w-full h-full"></canvas>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500 uppercase font-bold px-1" id="fin-chart-month-labels"></div>
+                </div>
+
+                <!-- Compliance Thresholds -->
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-5">
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">HMRC Compliance Thresholds</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-end text-xs">
+                            <span class="text-slate-400 font-bold">VAT Registration (£90k rolling 12m)</span>
+                            <span id="fin-vat-pct-label" class="font-bold text-brand-400">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-900">
+                            <div id="fin-vat-progress-bar" class="bg-brand-500 h-full transition-all duration-500 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-600">Rolling 12-month gross. Register when breached.</p>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-end text-xs">
+                            <span class="text-slate-400 font-bold">Making Tax Digital (£50k)</span>
+                            <span id="fin-mtd-pct-label" class="font-bold text-brand-400">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-900">
+                            <div id="fin-mtd-progress-bar" class="bg-brand-500 h-full transition-all duration-500 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-600">Annual gross. MTD for ITSA applies above this.</p>
+                    </div>
+                    <div class="pt-2 border-t border-slate-700/50 space-y-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-400 font-bold">Tax Year</span>
+                            <span id="fin-tax-year-label" class="text-slate-200 font-bold">—</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-400 font-bold">Self Assessment Deadline</span>
+                            <span id="fin-sa-deadline-label" class="text-rose-400 font-bold">31 Jan —</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-400 font-bold">Days Remaining</span>
+                            <span id="fin-sa-days-label" class="text-white font-black">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3: Job Margin Breakdown + Expense Log -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- Per-Job Margin Breakdown -->
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">Per-Job Margin Breakdown (Settled)</h3>
+                    <div id="fin-job-margin-list" class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                        <p class="text-slate-500 text-xs italic text-center py-8">No settled jobs yet.</p>
+                    </div>
+                </div>
+
+                <!-- Expense Log -->
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">Expense Log</h3>
+                    
+                    <!-- Add Expense Form -->
+                    <div class="bg-slate-950 p-3 rounded-xl border border-slate-900 space-y-3">
+                        <span class="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Log New Expense</span>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <input type="text" id="exp-description" placeholder="Description (e.g. Masonry bits)" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500 col-span-2">
+                            <input type="number" id="exp-amount" placeholder="Amount £" step="0.01" min="0" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                            <select id="exp-category" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                                <option value="Materials">Materials</option>
+                                <option value="Hardware">Hardware</option>
+                                <option value="Tools">Tools</option>
+                                <option value="Transport">Transport</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <button onclick="logNewExpenseEntry()" class="w-full bg-brand-500 text-slate-950 font-black py-2.5 rounded-xl text-xs uppercase tracking-wider">+ Add Expense</button>
+                    </div>
+
+                    <!-- Expense List -->
+                    <div id="fin-expense-list" class="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                        <p class="text-slate-500 text-xs italic text-center py-6">No expenses logged yet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 4: Transaction Ledger -->
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">Transaction Ledger</h3>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <!-- Type filter -->
+                        <div class="flex rounded-xl overflow-hidden border border-slate-700 text-[10px] font-black uppercase">
+                            <button id="txn-filter-all"    onclick="setTxnFilter('all')"     class="px-3 py-1.5 bg-brand-500 text-slate-950">All</button>
+                            <button id="txn-filter-income" onclick="setTxnFilter('income')"  class="px-3 py-1.5 text-slate-400 hover:text-white transition-all">Income</button>
+                            <button id="txn-filter-expense"onclick="setTxnFilter('expense')" class="px-3 py-1.5 text-slate-400 hover:text-white transition-all">Expense</button>
+                        </div>
+                        <!-- Month filter -->
+                        <select id="txn-month-filter" onchange="renderTransactionLedger()" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-[10px] font-bold uppercase outline-none focus:border-brand-500">
+                            <option value="all">All Months</option>
+                        </select>
+                        <!-- CSV export -->
+                        <button onclick="exportTransactionLedgerCSV()" class="bg-slate-900 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase hover:border-brand-500 transition-all">↓ CSV</button>
+                    </div>
+                </div>
+
+                <!-- Manual transaction entry -->
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-900 space-y-3">
+                    <span class="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Log Manual Transaction</span>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <input type="text" id="txn-description" placeholder="Description" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500 col-span-2">
+                        <input type="number" id="txn-amount" placeholder="Amount £" step="0.01" min="0" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                        <select id="txn-type" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                        <select id="txn-category" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                            <option value="Job Income">Job Income</option>
+                            <option value="Deposit Received">Deposit Received</option>
+                            <option value="Materials">Materials</option>
+                            <option value="Hardware">Hardware</option>
+                            <option value="Tools">Tools</option>
+                            <option value="Transport">Transport</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="date" id="txn-date" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-brand-500">
+                    </div>
+                    <button onclick="logManualTransaction()" class="w-full bg-brand-500 text-slate-950 font-black py-2.5 rounded-xl text-xs uppercase tracking-wider">+ Add Transaction</button>
+                </div>
+
+                <!-- Summary strip -->
+                <div class="grid grid-cols-3 gap-3 text-xs">
+                    <div class="bg-slate-950 rounded-xl border border-slate-900 p-3 text-center">
+                        <p class="text-[10px] uppercase text-slate-500 font-bold mb-1">Total In</p>
+                        <p id="txn-total-in" class="text-emerald-400 font-black text-base">£0.00</p>
+                    </div>
+                    <div class="bg-slate-950 rounded-xl border border-slate-900 p-3 text-center">
+                        <p class="text-[10px] uppercase text-slate-500 font-bold mb-1">Total Out</p>
+                        <p id="txn-total-out" class="text-rose-400 font-black text-base">£0.00</p>
+                    </div>
+                    <div class="bg-slate-950 rounded-xl border border-slate-900 p-3 text-center">
+                        <p class="text-[10px] uppercase text-slate-500 font-bold mb-1">Net</p>
+                        <p id="txn-net" class="text-white font-black text-base">£0.00</p>
+                    </div>
+                </div>
+
+                <!-- Ledger table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-700">
+                                <th class="text-left py-2 pr-3 whitespace-nowrap">Date</th>
+                                <th class="text-left py-2 pr-3">Description</th>
+                                <th class="text-left py-2 pr-3 whitespace-nowrap">Category</th>
+                                <th class="text-right py-2 pr-3 whitespace-nowrap">Amount</th>
+                                <th class="text-right py-2 whitespace-nowrap">Balance</th>
+                                <th class="py-2 w-6"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="txn-ledger-tbody" class="divide-y divide-slate-800/60">
+                            <tr><td colspan="6" class="text-center text-slate-500 italic py-10 text-xs">No transactions yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div id="calendar-tab" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                <div id="calendar-grid-matrix-container" class="grid grid-cols-7 gap-2 text-center text-xs pt-2"></div>
+            </div>
+        </div>
+
+        <div id="admin-tab" class="tab-content hidden space-y-6">
+
+            <!-- System constants -->
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-5">
+                <h3 class="text-xs font-black uppercase text-white tracking-wider">System Constants</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs bg-slate-950 p-4 rounded-xl border border-slate-800" id="admin-configs-inputs-target-grid"></div>
+                <div class="flex justify-end pt-2"><button onclick="commitGlobalConfigModificationChanges()" class="bg-brand-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg">Save System Constants</button></div>
+            </div>
+
+            <!-- Scheduling Configuration -->
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                <h3 class="text-xs font-black uppercase text-white tracking-wider">Scheduling Configuration</h3>
+
+                <!-- Available Days -->
+                <div class="space-y-3">
+                    <div>
+                        <h4 class="text-xs font-black uppercase text-slate-400 tracking-wider">Available Days</h4>
+                        <p class="text-[10px] text-slate-500 mt-1">Toggle which days of the week can be booked. Orange = open, grey = closed.</p>
+                    </div>
+                    <div id="avail-days-grid" class="flex gap-2 flex-wrap"></div>
+                </div>
+
+                <!-- Available Time Slots -->
+                <div class="space-y-3">
+                    <div>
+                        <h4 class="text-xs font-black uppercase text-slate-400 tracking-wider">Available Time Slots</h4>
+                        <p class="text-[10px] text-slate-500 mt-1">Each slot is a bookable arrival time. One job per slot — booked slots are locked in the calendar.</p>
+                    </div>
+                    <div id="time-slots-config-list" class="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar"></div>
+                    <div class="flex gap-2 pt-1">
+                        <input type="time" id="new-time-slot-input" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs font-bold outline-none focus:border-brand-500 transition-all">
+                        <button onclick="addConfigTimeSlot()" class="bg-brand-500/20 border border-brand-500/40 text-brand-400 font-black px-4 rounded-xl text-xs hover:bg-brand-500/30 transition-all uppercase tracking-wide">+ Add Slot</button>
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button onclick="saveSchedulingConfig()" class="bg-brand-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg hover:bg-brand-400 transition-all">Save Scheduling</button>
+                </div>
+
+                <!-- Blocked Dates Manager -->
+                <div class="border-t border-slate-700 pt-5 space-y-3">
+                    <div>
+                        <h4 class="text-xs font-black uppercase text-slate-400 tracking-wider">Block Out Specific Dates</h4>
+                        <p class="text-[10px] text-slate-500 mt-1">Mark individual dates as fully unavailable — they appear crossed out in the booking calendar.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="date" id="blocked-date-input" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-rose-500 transition-all">
+                        <button onclick="addBlockedDateFromInput()" class="bg-rose-500/20 border border-rose-500/30 text-rose-400 font-black px-4 rounded-xl text-xs hover:bg-rose-500/30 transition-all uppercase tracking-wide">Block Date</button>
+                    </div>
+                    <div id="blocked-dates-list" class="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                        <p class="text-slate-500 text-xs italic">No blocked dates set.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Products & Recipes tab -->
+        <div id="products-tab" class="tab-content hidden space-y-6">
+
+            <!-- Create new product -->
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                <div>
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">Add New Product</h3>
+                    <p class="text-[10px] text-slate-500 mt-1">Creates a new SKU in the product catalogue. A default recipe will be generated automatically.</p>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                    <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Product Name</label>
+                        <input type="text" id="new-product-name" placeholder="e.g. Workbench 1800mm"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Retail Price (£)</label>
+                        <input type="number" id="new-product-price" placeholder="0.00" step="0.01" min="0"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all text-right">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Width (mm)</label>
+                        <input type="number" id="new-product-width" placeholder="1200" step="100" min="300"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all text-right">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Depth (mm)</label>
+                        <input type="number" id="new-product-depth" placeholder="400" step="50" min="200"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all text-right">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Height (mm)</label>
+                        <input type="number" id="new-product-height" placeholder="1800" step="100" min="300"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all text-right">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-500 uppercase font-bold mb-1">Default Shelves</label>
+                        <input type="number" id="new-product-shelves" placeholder="3" step="1" min="1" max="10"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-xs outline-none focus:border-brand-500 transition-all text-right">
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="createNewProduct()" class="bg-brand-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-lg hover:bg-brand-400 transition-all">Create Product</button>
+                </div>
+            </div>
+
+            <!-- Recipe / Bill of Materials editor -->
+            <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                <div>
+                    <h3 class="text-xs font-black uppercase text-white tracking-wider">Product Recipes — Bill of Materials</h3>
+                    <p class="text-[10px] text-slate-500 mt-1">Define exact material quantities per SKU. Used to calculate real COGS in financials.</p>
+                </div>
+                <div id="recipe-editor-container" class="space-y-4">
+                    <p class="text-slate-500 text-xs italic text-center py-6">Loading SKUs…</p>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="fixed bottom-0 left-0 right-0 bg-slate-950/95 border-t border-slate-800 p-3 z-40 backdrop-blur shadow-2xl flex justify-around items-center rounded-t-3xl max-w-lg mx-auto">
+        <button onclick="toggleElement('checklist-modal')" class="flex flex-col items-center gap-1 text-slate-400 hover:text-brand-400 touch-target"><span class="text-xl">📋</span><span class="text-[9px] uppercase font-bold tracking-tighter">Safety Check</span></button>
+        <div class="w-px h-6 bg-slate-800"></div>
+        <button onclick="triggerInvoiceDocumentPDFDownloadFromActiveView()" class="flex flex-col items-center gap-1 text-slate-400 hover:text-emerald-400 touch-target"><span class="text-xl">📄</span><span class="text-[9px] uppercase font-bold tracking-tighter">Print Invoice</span></button>
+        <div class="w-px h-6 bg-slate-800"></div>
+        <div class="flex flex-col items-center gap-1 touch-target justify-center">
+            <div class="flex items-center gap-1.5">
+                <div id="realtime-status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                <span class="text-lg">📡</span>
+            </div>
+            <span id="realtime-status-label" class="text-[9px] uppercase font-bold tracking-tighter text-amber-400">Connecting</span>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
